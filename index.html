@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Gerencial KPI · Surcos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --blue:#086aa6; --blue-dark:#075580; --green:#78ad00; --green-dark:#5a8300;
+  --bg:#edf2ec; --card:#ffffff; --text:#17251c; --muted:#5a6f61; --border:#dce6dc;
+  --red:#c0392b; --yellow:#c98a00; --greenok:#2f8f4e;
+  --input-bg:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12181a; --card:#1b2422; --text:#eaf0ea; --muted:#9db3a3; --border:#2c3a34;
+    --input-bg:#22302b;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12181a; --card:#1b2422; --text:#eaf0ea; --muted:#9db3a3; --border:#2c3a34;
+  --input-bg:#22302b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;}
+header{background:linear-gradient(90deg,var(--blue),var(--blue-dark));color:white;padding:18px 22px;}
+header h1{margin:0;font-size:20px;letter-spacing:.3px}
+header p{margin:4px 0 0;font-size:13px;color:#cfe4f0}
+main{max-width:1180px;margin:0 auto;padding:20px;}
+.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tabs button{background:var(--card);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:20px;cursor:pointer;font-size:14px;font-weight:600}
+.tabs button.active{background:var(--green);border-color:var(--green);color:white}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;overflow-x:auto;}
+.card h2{margin:0 0 4px;font-size:17px}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.grid5{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.kpi-block{border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.kpi-block h3{margin:0 0 2px;font-size:14px;color:var(--blue)}
+.kpi-block .weight{font-size:11px;color:var(--muted);margin-bottom:8px}
+.kpi-block label{display:block;font-size:12px;color:var(--muted);margin-top:8px}
+.kpi-block input{width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:5px;background:var(--input-bg);color:var(--text);font-size:14px;margin-top:2px}
+.row-actions{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.row-actions select,.row-actions input[type=month]{padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text)}
+button.primary{background:var(--green);color:white;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px}
+button.primary:hover{background:var(--green-dark)}
+button.secondary{background:transparent;color:var(--blue);border:1px solid var(--blue);padding:9px 16px;border-radius:6px;cursor:pointer;font-size:14px}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;color:white}
+.badge.green{background:var(--greenok)}
+.badge.yellow{background:var(--yellow)}
+.badge.red{background:var(--red)}
+.badge.gray{background:#888}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--bg);font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+canvas{max-width:100%}
+.statnum{font-size:26px;font-weight:800;color:var(--blue)}
+.statlabel{font-size:12px;color:var(--muted)}
+.small-note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+.pill{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:4px 10px;font-size:12px;margin:2px}
+.msg{padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:14px}
+.msg.ok{background:#e4f3e6;color:#1e5c30}
+.msg.err{background:#fbe6e4;color:#8a2a1f}
+:root[data-theme="dark"] .msg.ok{background:#173321;color:#a9e0b6}
+:root[data-theme="dark"] .msg.err{background:#3a1f1b;color:#f0b3ab}
+@media(max-width:600px){header{padding:14px 16px}main{padding:12px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Control Gerencial de KPIs · Surcos</h1>
+  <p>Plan Anual de Comunicación Orgánica 2026–2027 · Registro mensual y tablero de seguimiento</p>
+</header>
+<main>
+  <div id="banner"></div>
+  <div class="tabs">
+    <button data-tab="registro" class="active">📝 Registro mensual</button>
+    <button data-tab="dashboard">📈 Dashboard</button>
+    <button data-tab="historico">🗂️ Histórico</button>
+  </div>
+
+  <section id="tab-registro">
+    <div class="card">
+      <h2>Seleccionar período a registrar</h2>
+      <div class="sub">El primer registro que guardes se considera automáticamente el <b>inicio de gestión</b> (línea base). Los siguientes se comparan contra el mes anterior y contra esa línea base.</div>
+      <div class="row-actions">
+        <label style="font-size:13px;color:var(--muted)">Mes:</label>
+        <input type="month" id="monthPicker">
+        <select id="existingSelect"><option value="">— o edita un registro existente —</option></select>
+        <button class="secondary" id="btnNew">+ Nuevo</button>
+      </div>
+      <div id="formArea"></div>
+    </div>
+  </section>
+
+  <section id="tab-dashboard" style="display:none">
+    <div id="dashArea"></div>
+  </section>
+
+  <section id="tab-historico" style="display:none">
+    <div class="card">
+      <h2>Histórico de registros</h2>
+      <div id="histArea"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const KPI_DEFS = {
+  k1:{name:"K1 · Tráfico web", weight:30, goal:"Conducir familias hacia el modelo educativo, proyectos y admisiones.",
+      fields:[["ig","IG · Toques en enlaces externos/perfil"],["fb","FB · Clics en el enlace"]]},
+  k2:{name:"K2 · Alcance / Nuevos seguidores", weight:25, goal:"Llegar a nuevas familias y ampliar el conocimiento del colegio.",
+      fields:[["ig","IG · Cuentas alcanzadas"],["fb","FB · Alcance"]]},
+  k3:{name:"K3 · Engagement de calidad", weight:20, goal:"Que las familias compartan, guarden y conversen sobre el contenido.",
+      fields:[["compartidos","Compartidos (IG+FB)"],["guardados","Guardados (si Meta los muestra)"],["comentarios","Comentarios relevantes (IG+FB)"]]},
+  k4:{name:"K4 · Interés en la marca", weight:20, goal:"Motivar a las familias a visitar el perfil y conocer más.",
+      fields:[["ig","IG · Visitas al perfil"],["fb","FB · Visitas a la página"]]},
+  k5:{name:"K5 · Crecimiento de comunidad", weight:5, goal:"Aumentar progresivamente una comunidad relevante.",
+      fields:[["ig","IG · Total de seguidores"],["fb","FB · Total de seguidores"]]},
+};
+const KPI_ORDER = ["k2","k4","k1","k3","k5"]; // ruta de diagnóstico del plan: descubrimiento -> interés -> acción -> calidad -> comunidad
+
+let db = null;
+let entries = []; // sorted chronologically
+let editingId = null;
+
+function banner(msg, type){
+  const b = document.getElementById('banner');
+  b.innerHTML = `<div class="msg ${type}">${msg}</div>`;
+  if(type==='ok') setTimeout(()=>{ if(b.firstChild) b.innerHTML=''; }, 3500);
+}
+
+function monthLabel(id){
+  if(id==='inicio') return 'Inicio de gestión';
+  const [y,m] = id.split('-');
+  const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return meses[parseInt(m,10)-1]+' '+y;
+}
+
+function sortEntries(){
+  entries.sort((a,b)=> (a.id==='inicio'?'0000-00':a.id).localeCompare(b.id==='inicio'?'0000-00':b.id));
+}
+
+function num(v){ const n = parseFloat(v); return isNaN(n) ? null : n; }
+
+function sum(obj, keys){
+  let any=false, total=0;
+  keys.forEach(k=>{ const v = obj?.[k]; if(v!==null && v!==undefined && v!==''){ total += Number(v); any=true; } });
+  return any ? total : null;
+}
+
+// ---- computed metrics per entry, given previous entry and baseline ----
+function computeEntry(e, prev, baseline){
+  const out = {};
+  const k1total = sum(e.k1, ['ig','fb']);
+  const k2total = sum(e.k2, ['ig','fb']);
+  const k3Q = sum(e.k3, ['compartidos','guardados','comentarios']);
+  const k4total = sum(e.k4, ['ig','fb']);
+  const k5total = sum(e.k5, ['ig','fb']);
+
+  out.k1 = { value: k1total, variation: variation(k1total, prev? sum(prev.k1,['ig','fb']) : null) };
+  out.k2 = { value: k2total, variation: variation(k2total, prev? sum(prev.k2,['ig','fb']) : null) };
+  const k3rate = (k3Q!==null && k2total) ? (k3Q/k2total*100) : null;
+  const prevK3rate = prev ? (()=>{ const pq=sum(prev.k3,['compartidos','guardados','comentarios']); const pk2=sum(prev.k2,['ig','fb']); return (pq!==null&&pk2)?(pq/pk2*100):null; })() : null;
+  out.k3 = { Q: k3Q, rate: k3rate, variation: variation(k3rate, prevK3rate) };
+  out.k4 = { value: k4total, variation: variation(k4total, prev? sum(prev.k4,['ig','fb']) : null) };
+  const baseK5 = baseline ? sum(baseline.k5,['ig','fb']) : null;
+  const netBase = (k5total!==null && baseK5!==null) ? (k5total-baseK5) : null;
+  out.k5 = { value: k5total, variation: variation(k5total, prev? sum(prev.k5,['ig','fb']) : null),
+             netFromBaseline: netBase,
+             rateFromBaseline: (netBase!==null && baseK5) ? (netBase/baseK5*100) : null };
+  return out;
+}
+
+function variation(curr, prev){
+  if(curr===null || curr===undefined) return null;
+  if(prev===null || prev===undefined) return null;
+  if(prev===0) return {abs: curr-prev};
+  return {pct: (curr-prev)/prev*100};
+}
+
+function fmtVar(v){
+  if(!v) return '<span class="pill">N/D</span>';
+  if(v.abs!==undefined) return `<span class="pill">${v.abs>=0?'+':''}${v.abs.toFixed(0)} (base 0)</span>`;
+  const s = v.pct>=0?'+':'';
+  return `<span class="pill">${s}${v.pct.toFixed(1)}%</span>`;
+}
+
+function semaforo(kpiKey, value, variation, meta){
+  if(value===null || value===undefined) return {cls:'gray', label:'N/D'};
+  if(meta!==null && meta!==undefined && meta!==''){
+    const m = Number(meta);
+    const ratio = m!==0 ? value/m : (value>0?1.2:0);
+    if(ratio>=1) return {cls:'green', label:'Cumple meta'};
+    if(ratio>=0.9) return {cls:'yellow', label:'Cerca de meta'};
+    return {cls:'red', label:'Bajo meta'};
+  }
+  if(!variation) return {cls:'gray', label:'N/D'};
+  const pct = variation.pct!==undefined ? variation.pct : (variation.abs>0?5:variation.abs<0?-5:0);
+  if(pct>0) return {cls:'green', label:'Sube'};
+  if(pct>=-5) return {cls:'yellow', label:'Estable'};
+  return {cls:'red', label:'Baja'};
+}
+
+// ---------------- DB (Supabase) ----------------
+async function initDb(){
+  try{
+    if(!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY || window.SUPABASE_URL.includes('TU-PROYECTO')){
+      banner('Falta configurar config.js con la URL y la anon key de tu proyecto Supabase.', 'err');
+      return;
+    }
+    db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  }catch(e){ db = null; }
+  if(!db){ banner('No se pudo conectar a Supabase.', 'err'); return; }
+  await loadEntries();
+}
+
+async function loadEntries(){
+  try{
+    const { data, error } = await db.from('kpi_entries').select('*');
+    if(error) throw error;
+    entries = (data || []).map(row => ({
+      id: row.id, label: row.label, notes: row.notes,
+      k1: row.k1 || {}, k2: row.k2 || {}, k3: row.k3 || {}, k4: row.k4 || {}, k5: row.k5 || {},
+      metas: row.metas || {}
+    }));
+  }catch(e){ entries = []; banner('No se pudieron cargar los registros de Supabase.', 'err'); }
+  sortEntries();
+  renderExistingSelect();
+  renderDashboard();
+  renderHistorico();
+}
+
+async function saveEntry(id, data){
+  try{
+    const row = { id, label: data.label, notes: data.notes,
+                  k1: data.k1, k2: data.k2, k3: data.k3, k4: data.k4, k5: data.k5,
+                  metas: data.metas, updated_at: new Date().toISOString() };
+    const { error } = await db.from('kpi_entries').upsert(row);
+    if(error) throw error;
+    banner('Registro guardado correctamente.', 'ok');
+    await loadEntries();
+  }catch(e){
+    banner('No se pudo guardar el registro. Intenta de nuevo.', 'err');
+  }
+}
+
+async function deleteEntry(id){
+  if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  try{
+    const { error } = await db.from('kpi_entries').delete().eq('id', id);
+    if(error) throw error;
+    banner('Registro eliminado.', 'ok');
+    await loadEntries();
+  }catch(e){ banner('No se pudo eliminar.', 'err'); }
+}
+
+// ---------------- Registro tab ----------------
+function buildForm(existing){
+  const isBaseline = entries.length===0 && !existing;
+  const area = document.getElementById('formArea');
+  const data = existing || { metas:{} };
+  let html = '';
+  if(isBaseline){
+    html += `<div class="msg ok">Este será tu <b>registro de inicio de gestión</b> (línea base). Ingresa los valores actuales de tus redes antes de comenzar el plan.</div>`;
+  }
+  html += '<div class="grid5">';
+  Object.keys(KPI_DEFS).forEach(k=>{
+    const def = KPI_DEFS[k];
+    html += `<div class="kpi-block"><h3>${def.name}</h3><div class="weight">Peso: ${def.weight}% · ${def.goal}</div>`;
+    def.fields.forEach(([fk,flabel])=>{
+      const val = (data[k] && data[k][fk]!==undefined) ? data[k][fk] : '';
+      html += `<label>${flabel}</label><input type="number" min="0" step="1" data-kpi="${k}" data-field="${fk}" value="${val}">`;
+    });
+    const metaVal = (data.metas && data.metas[k]!==undefined) ? data.metas[k] : '';
+    html += `<label>Meta del mes (opcional, unidad del KPI)</label><input type="number" data-meta="${k}" value="${metaVal}">`;
+    html += `</div>`;
+  });
+  html += '</div>';
+  html += `<label style="display:block;margin-top:14px;font-size:13px;color:var(--muted)">Notas del mes (opcional)</label>
+           <input type="text" id="notesInput" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text);margin-top:4px" value="${data.notes||''}">`;
+  html += `<div style="margin-top:16px;display:flex;gap:10px">
+             <button class="primary" id="btnSave">💾 Guardar registro</button>
+             ${existing ? '<button class="secondary" id="btnDelete">🗑️ Eliminar</button>' : ''}
+           </div>`;
+  area.innerHTML = html;
+
+  document.getElementById('btnSave').onclick = async ()=>{
+    const monthVal = document.getElementById('monthPicker').value;
+    let id = existing ? existing.id : (isBaseline ? 'inicio' : monthVal);
+    if(!id){ banner('Selecciona un mes antes de guardar.', 'err'); return; }
+    const payload = { label: id==='inicio' ? 'Inicio de gestión' : monthLabel(id), notes: document.getElementById('notesInput').value, metas:{} };
+    Object.keys(KPI_DEFS).forEach(k=>{
+      payload[k] = {};
+      KPI_DEFS[k].fields.forEach(([fk])=>{
+        const el = area.querySelector(`input[data-kpi="${k}"][data-field="${fk}"]`);
+        payload[k][fk] = num(el.value);
+      });
+      const metaEl = area.querySelector(`input[data-meta="${k}"]`);
+      payload.metas[k] = num(metaEl.value);
+    });
+    await saveEntry(id, payload);
+  };
+  if(existing){
+    document.getElementById('btnDelete').onclick = ()=> deleteEntry(existing.id);
+  }
+}
+
+function renderExistingSelect(){
+  const sel = document.getElementById('existingSelect');
+  sel.innerHTML = '<option value="">— o edita un registro existente —</option>';
+  entries.forEach(e=>{
+    const o = document.createElement('option');
+    o.value = e.id; o.textContent = e.label || monthLabel(e.id);
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('existingSelect').addEventListener('change', (e)=>{
+  const id = e.target.value;
+  if(!id){ buildForm(null); return; }
+  const existing = entries.find(x=>x.id===id);
+  editingId = id;
+  document.getElementById('monthPicker').value = id==='inicio' ? '' : id;
+  buildForm(existing);
+});
+
+document.getElementById('btnNew').addEventListener('click', ()=>{
+  document.getElementById('existingSelect').value = '';
+  document.getElementById('monthPicker').value = '';
+  buildForm(null);
+});
+
+// ---------------- Dashboard ----------------
+let charts = {};
+function renderDashboard(){
+  const area = document.getElementById('dashArea');
+  if(entries.length===0){
+    area.innerHTML = `<div class="card"><p>Aún no hay registros. Ve a "Registro mensual" para ingresar tu línea base.</p></div>`;
+    return;
+  }
+  const baseline = entries.find(e=>e.id==='inicio') || entries[0];
+  const computed = entries.map((e,i)=> ({ e, c: computeEntry(e, i>0?entries[i-1]:null, baseline) }));
+  const latest = computed[computed.length-1];
+
+  let html = '<div class="dash-grid">';
+  KPI_ORDER.forEach(k=>{
+    const def = KPI_DEFS[k];
+    const val = k==='k3' ? latest.c.k3.rate : latest.c[k].value;
+    const varn = latest.c[k].variation;
+    const meta = latest.e.metas ? latest.e.metas[k] : null;
+    const sem = semaforo(k, val, varn, meta);
+    html += `<div class="card">
+      <h2>${def.name} <span class="badge ${sem.cls}">${sem.label}</span></h2>
+      <div class="sub">Peso ${def.weight}% · ${monthLabel(latest.e.id)}</div>
+      <div class="statnum">${val!==null? (k==='k3'? val.toFixed(1)+'%' : val.toLocaleString()) : 'N/D'}</div>
+      <div class="statlabel">Variación vs mes anterior: ${fmtVar(varn)}</div>
+      ${meta ? `<div class="statlabel">Meta del mes: ${meta}</div>`:''}
+      ${k==='k5' ? `<div class="statlabel">Crecimiento neto desde inicio: ${latest.c.k5.netFromBaseline!==null? latest.c.k5.netFromBaseline : 'N/D'}</div>`:''}
+      <canvas id="chart-${k}" height="140"></canvas>
+    </div>`;
+  });
+  html += '</div>';
+  html += `<div class="card small-note">
+    <b>Cómo leer este tablero</b><br>
+    Los pesos indican prioridad estratégica, no se suman entre sí (el plan evita construir un puntaje único sin significado).
+    Ruta sugerida de diagnóstico: primero revisar descubrimiento (K2), luego interés (K4) y acción hacia la web (K1);
+    después calidad de interacción (K3) y retención/captación de comunidad (K5). Un dato N/D significa que falta información —
+    nunca se convierte en cero.
+  </div>`;
+  area.innerHTML = html;
+
+  // charts
+  Object.values(charts).forEach(c=>c.destroy());
+  charts = {};
+  const labels = computed.map(x=> x.e.label || monthLabel(x.e.id));
+  KPI_ORDER.forEach(k=>{
+    const ctx = document.getElementById('chart-'+k);
+    if(!ctx || !window.Chart) return;
+    const data = computed.map(x=> k==='k3' ? x.c.k3.rate : x.c[k].value);
+    charts[k] = new Chart(ctx, {
+      type:'line',
+      data:{ labels, datasets:[{ label: KPI_DEFS[k].name, data, borderColor:'#086aa6', backgroundColor:'rgba(8,106,166,0.12)', tension:.3, fill:true, spanGaps:true }]},
+      options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true } } }
+    });
+  });
+}
+
+// ---------------- Histórico ----------------
+function renderHistorico(){
+  const area = document.getElementById('histArea');
+  if(entries.length===0){ area.innerHTML = '<p>Sin registros aún.</p>'; return; }
+  const baseline = entries.find(e=>e.id==='inicio') || entries[0];
+  const computed = entries.map((e,i)=> ({ e, c: computeEntry(e, i>0?entries[i-1]:null, baseline) }));
+  let html = `<div style="overflow-x:auto"><table><thead><tr>
+    <th>Período</th><th>K1 Tráfico</th><th>K2 Alcance</th><th>K3 Tasa Q</th><th>K4 Interés</th><th>K5 Seguidores</th><th>Notas</th>
+    </tr></thead><tbody>`;
+  computed.forEach(({e,c})=>{
+    html += `<tr>
+      <td><b>${e.label||monthLabel(e.id)}</b></td>
+      <td>${c.k1.value ?? 'N/D'} ${fmtVar(c.k1.variation)}</td>
+      <td>${c.k2.value ?? 'N/D'} ${fmtVar(c.k2.variation)}</td>
+      <td>${c.k3.rate!==null? c.k3.rate.toFixed(1)+'%':'N/D'} ${fmtVar(c.k3.variation)}</td>
+      <td>${c.k4.value ?? 'N/D'} ${fmtVar(c.k4.variation)}</td>
+      <td>${c.k5.value ?? 'N/D'} ${fmtVar(c.k5.variation)}</td>
+      <td style="max-width:200px">${e.notes||''}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+// ---------------- Tabs ----------------
+document.querySelectorAll('.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    ['registro','dashboard','historico'].forEach(t=>{
+      document.getElementById('tab-'+t).style.display = (t===btn.dataset.tab)?'block':'none';
+    });
+  });
+});
+
+// init
+buildForm(null);
+initDb();
+</script>
+</body>
+</html>

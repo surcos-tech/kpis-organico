@@ -110,18 +110,18 @@ canvas{max-width:100%}
 
 <script>
 const KPI_DEFS = {
-  k1:{name:"K1 · Tráfico web", weight:30, goal:"Conducir familias hacia el modelo educativo, proyectos y admisiones.",
-      fields:[["ig","IG · Toques en enlaces externos/perfil"],["fb","FB · Clics en el enlace"]]},
-  k2:{name:"K2 · Alcance / Nuevos seguidores", weight:25, goal:"Llegar a nuevas familias y ampliar el conocimiento del colegio.",
+  k1:{name:"Tráfico web", weight:30, goal:"Conducir familias hacia el sitio web, admisiones y proyectos.",
+      fields:[["ig","IG · Clics/toques hacia el sitio"],["fb","FB · Clics en el enlace"]]},
+  k2:{name:"Alcance", weight:25, goal:"Ampliar el conocimiento del colegio entre nuevas familias.",
       fields:[["ig","IG · Cuentas alcanzadas"],["fb","FB · Alcance"]]},
-  k3:{name:"K3 · Engagement de calidad", weight:20, goal:"Que las familias compartan, guarden y conversen sobre el contenido.",
+  k3:{name:"Engagement", weight:20, goal:"Que las familias compartan, guarden y comenten el contenido.",
       fields:[["compartidos","Compartidos (IG+FB)"],["guardados","Guardados (si Meta los muestra)"],["comentarios","Comentarios relevantes (IG+FB)"]]},
-  k4:{name:"K4 · Interés en la marca", weight:20, goal:"Motivar a las familias a visitar el perfil y conocer más.",
-      fields:[["ig","IG · Visitas al perfil"],["fb","FB · Visitas a la página"]]},
-  k5:{name:"K5 · Crecimiento de comunidad", weight:5, goal:"Aumentar progresivamente una comunidad relevante.",
+  k4:{name:"CTR de enlace", weight:20, goal:"Qué proporción de quienes vieron una pieza con enlace hizo clic en él. Sin enlace: deja los campos vacíos (no aplica).",
+      fields:[["ig_clics","IG · Clics en piezas con enlace"],["ig_alcance","IG · Alcance de esas piezas"],["fb_clics","FB · Clics en piezas con enlace"],["fb_alcance","FB · Alcance de esas piezas"]]},
+  k5:{name:"Crecimiento de comunidad", weight:5, goal:"Aumentar progresivamente una comunidad relevante.",
       fields:[["ig","IG · Total de seguidores"],["fb","FB · Total de seguidores"]]},
 };
-const KPI_ORDER = ["k2","k4","k1","k3","k5"]; // ruta de diagnóstico del plan: descubrimiento -> interés -> acción -> calidad -> comunidad
+const KPI_ORDER = ["k2","k4","k1","k3","k5"]; // ruta de diagnóstico del plan: descubrimiento -> interés de clic -> acción -> calidad -> comunidad
 
 let db = null;
 let entries = []; // sorted chronologically
@@ -158,7 +158,6 @@ function computeEntry(e, prev, baseline){
   const k1total = sum(e.k1, ['ig','fb']);
   const k2total = sum(e.k2, ['ig','fb']);
   const k3Q = sum(e.k3, ['compartidos','guardados','comentarios']);
-  const k4total = sum(e.k4, ['ig','fb']);
   const k5total = sum(e.k5, ['ig','fb']);
 
   out.k1 = { value: k1total, variation: variation(k1total, prev? sum(prev.k1,['ig','fb']) : null) };
@@ -166,7 +165,11 @@ function computeEntry(e, prev, baseline){
   const k3rate = (k3Q!==null && k2total) ? (k3Q/k2total*100) : null;
   const prevK3rate = prev ? (()=>{ const pq=sum(prev.k3,['compartidos','guardados','comentarios']); const pk2=sum(prev.k2,['ig','fb']); return (pq!==null&&pk2)?(pq/pk2*100):null; })() : null;
   out.k3 = { Q: k3Q, rate: k3rate, variation: variation(k3rate, prevK3rate) };
-  out.k4 = { value: k4total, variation: variation(k4total, prev? sum(prev.k4,['ig','fb']) : null) };
+  const k4Clics = sum(e.k4, ['ig_clics','fb_clics']);
+  const k4Alcance = sum(e.k4, ['ig_alcance','fb_alcance']);
+  const k4rate = (k4Clics!==null && k4Alcance) ? (k4Clics/k4Alcance*100) : null;
+  const prevK4rate = prev ? (()=>{ const pc=sum(prev.k4,['ig_clics','fb_clics']); const pa=sum(prev.k4,['ig_alcance','fb_alcance']); return (pc!==null&&pa)?(pc/pa*100):null; })() : null;
+  out.k4 = { clics: k4Clics, alcance: k4Alcance, rate: k4rate, variation: variation(k4rate, prevK4rate) };
   const baseK5 = baseline ? sum(baseline.k5,['ig','fb']) : null;
   const netBase = (k5total!==null && baseK5!==null) ? (k5total-baseK5) : null;
   out.k5 = { value: k5total, variation: variation(k5total, prev? sum(prev.k5,['ig','fb']) : null),
@@ -189,20 +192,13 @@ function fmtVar(v){
   return `<span class="pill">${s}${v.pct.toFixed(1)}%</span>`;
 }
 
-function semaforo(kpiKey, value, variation, meta){
+function semaforo(value, meta){
   if(value===null || value===undefined) return {cls:'gray', label:'N/D'};
-  if(meta!==null && meta!==undefined && meta!==''){
-    const m = Number(meta);
-    const ratio = m!==0 ? value/m : (value>0?1.2:0);
-    if(ratio>=1) return {cls:'green', label:'Cumple meta'};
-    if(ratio>=0.9) return {cls:'yellow', label:'Cerca de meta'};
-    return {cls:'red', label:'Bajo meta'};
-  }
-  if(!variation) return {cls:'gray', label:'N/D'};
-  const pct = variation.pct!==undefined ? variation.pct : (variation.abs>0?5:variation.abs<0?-5:0);
-  if(pct>0) return {cls:'green', label:'Sube'};
-  if(pct>=-5) return {cls:'yellow', label:'Estable'};
-  return {cls:'red', label:'Baja'};
+  if(meta===null || meta===undefined || meta==='' || Number(meta)<=0) return {cls:'gray', label:'Sin meta'};
+  const ratio = value/Number(meta);
+  if(ratio>=1) return {cls:'green', label:'Cumple meta'};
+  if(ratio>=0.8) return {cls:'yellow', label:'Cerca de meta'};
+  return {cls:'red', label:'Bajo meta'};
 }
 
 // ---------------- DB (Supabase) ----------------
@@ -224,6 +220,7 @@ async function loadEntries(){
     if(error) throw error;
     entries = (data || []).map(row => ({
       id: row.id, label: row.label, notes: row.notes,
+      responsable: row.responsable, extraccion: row.extraccion, fuente: row.fuente,
       k1: row.k1 || {}, k2: row.k2 || {}, k3: row.k3 || {}, k4: row.k4 || {}, k5: row.k5 || {},
       metas: row.metas || {}
     }));
@@ -237,6 +234,7 @@ async function loadEntries(){
 async function saveEntry(id, data){
   try{
     const row = { id, label: data.label, notes: data.notes,
+                  responsable: data.responsable || null, extraccion: data.extraccion || null, fuente: data.fuente || null,
                   k1: data.k1, k2: data.k2, k3: data.k3, k4: data.k4, k5: data.k5,
                   metas: data.metas, updated_at: new Date().toISOString() };
     const { error } = await db.from('kpi_entries').upsert(row);
@@ -280,7 +278,12 @@ function buildForm(existing){
     html += `</div>`;
   });
   html += '</div>';
-  html += `<label style="display:block;margin-top:14px;font-size:13px;color:var(--muted)">Notas del mes (opcional)</label>
+  html += `<div class="grid5" style="margin-top:14px">
+    <div class="kpi-block"><h3>Responsable</h3><input type="text" id="responsableInput" value="${data.responsable||''}"></div>
+    <div class="kpi-block"><h3>Fecha de extracción</h3><input type="date" id="extraccionInput" value="${data.extraccion||''}"></div>
+    <div class="kpi-block"><h3>Fuente / condición</h3><input type="text" id="fuenteInput" placeholder="Ej: Meta Business Suite, sin incidencias" value="${data.fuente||''}"></div>
+  </div>`;
+  html += `<label style="display:block;margin-top:14px;font-size:13px;color:var(--muted)">Notas / observación del mes (opcional)</label>
            <input type="text" id="notesInput" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text);margin-top:4px" value="${data.notes||''}">`;
   html += `<div style="margin-top:16px;display:flex;gap:10px">
              <button class="primary" id="btnSave">💾 Guardar registro</button>
@@ -292,7 +295,11 @@ function buildForm(existing){
     const monthVal = document.getElementById('monthPicker').value;
     let id = existing ? existing.id : (isBaseline ? 'inicio' : monthVal);
     if(!id){ banner('Selecciona un mes antes de guardar.', 'err'); return; }
-    const payload = { label: id==='inicio' ? 'Inicio de gestión' : monthLabel(id), notes: document.getElementById('notesInput').value, metas:{} };
+    const payload = { label: id==='inicio' ? 'Inicio de gestión' : monthLabel(id), notes: document.getElementById('notesInput').value,
+      responsable: document.getElementById('responsableInput').value,
+      extraccion: document.getElementById('extraccionInput').value,
+      fuente: document.getElementById('fuenteInput').value,
+      metas:{} };
     Object.keys(KPI_DEFS).forEach(k=>{
       payload[k] = {};
       KPI_DEFS[k].fields.forEach(([fk])=>{
@@ -349,16 +356,16 @@ function renderDashboard(){
   let html = '<div class="dash-grid">';
   KPI_ORDER.forEach(k=>{
     const def = KPI_DEFS[k];
-    const val = k==='k3' ? latest.c.k3.rate : latest.c[k].value;
+    const val = (k==='k3' || k==='k4') ? latest.c[k].rate : latest.c[k].value;
     const varn = latest.c[k].variation;
     const meta = latest.e.metas ? latest.e.metas[k] : null;
-    const sem = semaforo(k, val, varn, meta);
+    const sem = semaforo(val, meta);
     html += `<div class="card">
       <h2>${def.name} <span class="badge ${sem.cls}">${sem.label}</span></h2>
       <div class="sub">Peso ${def.weight}% · ${monthLabel(latest.e.id)}</div>
-      <div class="statnum">${val!==null? (k==='k3'? val.toFixed(1)+'%' : val.toLocaleString()) : 'N/D'}</div>
+      <div class="statnum">${val!==null? ((k==='k3'||k==='k4')? val.toFixed(1)+'%' : val.toLocaleString()) : 'N/D'}</div>
       <div class="statlabel">Variación vs mes anterior: ${fmtVar(varn)}</div>
-      ${meta ? `<div class="statlabel">Meta del mes: ${meta}</div>`:''}
+      ${meta ? `<div class="statlabel">Meta del mes: ${meta}${(k==='k3'||k==='k4')?'%':''} · Cumplimiento: ${val!==null?(val/meta*100).toFixed(0)+'%':'N/D'}</div>`:''}
       ${k==='k5' ? `<div class="statlabel">Crecimiento neto desde inicio: ${latest.c.k5.netFromBaseline!==null? latest.c.k5.netFromBaseline : 'N/D'}</div>`:''}
       <canvas id="chart-${k}" height="140"></canvas>
     </div>`;
@@ -366,10 +373,12 @@ function renderDashboard(){
   html += '</div>';
   html += `<div class="card small-note">
     <b>Cómo leer este tablero</b><br>
-    Los pesos indican prioridad estratégica, no se suman entre sí (el plan evita construir un puntaje único sin significado).
-    Ruta sugerida de diagnóstico: primero revisar descubrimiento (K2), luego interés (K4) y acción hacia la web (K1);
-    después calidad de interacción (K3) y retención/captación de comunidad (K5). Un dato N/D significa que falta información —
-    nunca se convierte en cero.
+    Los pesos (Tráfico 30%, Alcance 25%, Engagement 20%, CTR de enlace 20%, Comunidad 5%) son antecedentes estratégicos,
+    no metas ni se suman entre sí para un índice único.
+    Ruta sugerida de diagnóstico: primero descubrimiento (Alcance), luego interés de clic (CTR de enlace) y acción hacia la web (Tráfico);
+    después calidad de interacción (Engagement) y retención/captación de comunidad (Comunidad).
+    Semáforo: verde = cumple 100% o más de la meta del mes; ámbar = 80–99%; rojo = menos de 80%; gris = sin meta cargada o sin datos comparables.
+    Un dato N/D significa que falta información — nunca se convierte en cero.
   </div>`;
   area.innerHTML = html;
 
@@ -380,7 +389,7 @@ function renderDashboard(){
   KPI_ORDER.forEach(k=>{
     const ctx = document.getElementById('chart-'+k);
     if(!ctx || !window.Chart) return;
-    const data = computed.map(x=> k==='k3' ? x.c.k3.rate : x.c[k].value);
+    const data = computed.map(x=> (k==='k3'||k==='k4') ? x.c[k].rate : x.c[k].value);
     charts[k] = new Chart(ctx, {
       type:'line',
       data:{ labels, datasets:[{ label: KPI_DEFS[k].name, data, borderColor:'#086aa6', backgroundColor:'rgba(8,106,166,0.12)', tension:.3, fill:true, spanGaps:true }]},
@@ -396,7 +405,7 @@ function renderHistorico(){
   const baseline = entries.find(e=>e.id==='inicio') || entries[0];
   const computed = entries.map((e,i)=> ({ e, c: computeEntry(e, i>0?entries[i-1]:null, baseline) }));
   let html = `<div style="overflow-x:auto"><table><thead><tr>
-    <th>Período</th><th>K1 Tráfico</th><th>K2 Alcance</th><th>K3 Tasa Q</th><th>K4 Interés</th><th>K5 Seguidores</th><th>Notas</th>
+    <th>Período</th><th>Tráfico</th><th>Alcance</th><th>Engagement</th><th>CTR de enlace</th><th>Comunidad</th><th>Notas</th>
     </tr></thead><tbody>`;
   computed.forEach(({e,c})=>{
     html += `<tr>
@@ -404,9 +413,9 @@ function renderHistorico(){
       <td>${c.k1.value ?? 'N/D'} ${fmtVar(c.k1.variation)}</td>
       <td>${c.k2.value ?? 'N/D'} ${fmtVar(c.k2.variation)}</td>
       <td>${c.k3.rate!==null? c.k3.rate.toFixed(1)+'%':'N/D'} ${fmtVar(c.k3.variation)}</td>
-      <td>${c.k4.value ?? 'N/D'} ${fmtVar(c.k4.variation)}</td>
+      <td>${c.k4.rate!==null? c.k4.rate.toFixed(1)+'%':'N/D'} ${fmtVar(c.k4.variation)}</td>
       <td>${c.k5.value ?? 'N/D'} ${fmtVar(c.k5.variation)}</td>
-      <td style="max-width:200px">${e.notes||''}</td>
+      <td style="max-width:200px">${e.responsable? '<b>Resp.:</b> '+e.responsable+'<br>':''}${e.notes||''}</td>
     </tr>`;
   });
   html += '</tbody></table></div>';
